@@ -7,7 +7,7 @@
   /* ============================================================
      👇 CONFIGURACIÓN — PEGA TUS CREDENCIALES AQUÍ 👇
   ============================================================ */
-  const SUPABASE_URL      = 'https://bmerhduoeeddypaebaik.supabase.co';        // ej: https://xxxxx.supabase.co
+  const SUPABASE_URL      = 'https://bmerhduoeeddypaebaik.supabase.co';        // ej: https://xxxxx.supabase.co (SIN /rest/v1/ al final)
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtZXJoZHVvZWVkZHlwYWViYWlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5Mjc1NTEsImV4cCI6MjEwNTUwMzU1MX0.Ybh9vZ4B9xnpdX93a3WCyf-D7NP0FQMWSN8huYHIv_8';               // la clave larga que empieza con eyJ...
   /* ============================================================ */
 
@@ -421,10 +421,29 @@
       this._notify();
     },
 
+    /* Obtener el próximo número de pedido de forma segura (evita códigos repetidos
+       si dos clientes piden al mismo tiempo desde dispositivos distintos) */
+    async _nextCounter() {
+      if (this.SUPABASE_ENABLED && supabase) {
+        try {
+          // Requiere la función SQL next_order_counter() — ver setup_counter.sql
+          const { data, error } = await supabase.rpc('next_order_counter');
+          if (error) throw error;
+          if (typeof data === 'number') { this.DB.counter = data; return data; }
+        } catch (err) {
+          console.warn('[Pizzeria] next_order_counter() no disponible, usando conteo local:', err.message || err);
+        }
+      }
+      // Alternativa local (o si la función SQL todavía no se instaló)
+      this.DB.counter = (this.DB.counter || 1000) + 1;
+      return this.DB.counter;
+    },
+
     /* Crear pedido (cliente) */
     async placeOrder(order) {
+      const counter = await this._nextCounter();
+      order.codigo = 'PED-' + counter;
       this.DB.orders.unshift(order);
-      this.DB.counter = (this.DB.counter || 1000) + 1;
       if (this.SUPABASE_ENABLED && supabase) {
         try {
           const { error } = await supabase.from('orders').insert(orderToRow(order));
@@ -439,6 +458,7 @@
         localStorage.setItem(DB_KEY, JSON.stringify(this.DB));
       }
       this._notify();
+      return order;
     },
 
     /* Actualizar pedido (admin) */

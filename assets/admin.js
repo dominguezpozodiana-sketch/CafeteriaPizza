@@ -441,7 +441,7 @@
         <div class="panel-head"><h3>📏 Tamaños de pizza</h3><div class="spacer"></div>
           <button type="button" class="btn sm ghost" data-action="add-size">＋ Añadir</button></div>
         <div class="panel-body" id="sizes-box">
-          ${s.sizes.map(x => `<div class="row-item">
+          ${s.sizes.map(x => `<div class="row-item" data-row-id="${esc(x.id)}">
             <input value="${esc(x.nombre)}" data-size-name placeholder="Nombre (Mediana)">
             <input type="number" step="0.05" min="0.1" value="${x.factor}" data-size-factor style="max-width:120px">
             <button type="button" class="del" data-action="del-size" data-id="${x.id}">✕</button>
@@ -453,7 +453,7 @@
         <div class="panel-head"><h3>➕ Extras disponibles</h3><div class="spacer"></div>
           <button type="button" class="btn sm ghost" data-action="add-extra">＋ Añadir</button></div>
         <div class="panel-body" id="extras-box">
-          ${s.extras.map(x => `<div class="row-item">
+          ${s.extras.map(x => `<div class="row-item" data-row-id="${esc(x.id)}">
             <input value="${esc(x.nombre)}" data-extra-name placeholder="Nombre del extra">
             <input type="number" step="0.01" min="0" value="${x.precio}" data-extra-price style="max-width:120px">
             <button type="button" class="del" data-action="del-extra" data-id="${x.id}">✕</button>
@@ -731,11 +731,15 @@
         toast('🔐 Contraseña actualizada', 'ok');
       }
 
+      // Conserva el id existente de cada tamaño/extra (si lo tenía) para no romper
+      // los precios de los carritos que los clientes ya tengan guardados; solo
+      // genera un id nuevo para las filas que se acaban de añadir.
       const sizes = [];
       document.querySelectorAll('#sizes-box .row-item').forEach((row, i) => {
         const n = row.querySelector('[data-size-name]')?.value.trim();
         const fct = parseFloat(row.querySelector('[data-size-factor]')?.value) || 1;
-        if (n) sizes.push({ id: 's' + (i + 1) + uid().slice(0, 3), nombre: n, factor: fct });
+        const existingId = row.dataset.rowId;
+        if (n) sizes.push({ id: existingId || ('s' + (i + 1) + uid().slice(0, 3)), nombre: n, factor: fct });
       });
       if (sizes.length) s.sizes = sizes;
 
@@ -743,7 +747,8 @@
       document.querySelectorAll('#extras-box .row-item').forEach((row, i) => {
         const n = row.querySelector('[data-extra-name]')?.value.trim();
         const pr = parseFloat(row.querySelector('[data-extra-price]')?.value) || 0;
-        if (n) extras.push({ id: 'e' + (i + 1) + uid().slice(0, 3), nombre: n, precio: pr });
+        const existingId = row.dataset.rowId;
+        if (n) extras.push({ id: existingId || ('e' + (i + 1) + uid().slice(0, 3)), nombre: n, precio: pr });
       });
       s.extras = extras;
 

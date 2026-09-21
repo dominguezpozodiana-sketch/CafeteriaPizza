@@ -352,10 +352,8 @@
       toast(`El pedido mínimo para delivery es ${money(s.minOrder)}`, 'err'); return;
     }
     const envio = tipo === 'delivery' ? Number(s.deliveryFee) : 0;
-    const nextCounter = (P.DB.counter || 1000) + 1;
-    const codigo = 'PED-' + nextCounter;
     const order = {
-      id: uid(), codigo, creado: now(),
+      id: uid(), creado: now(),
       cliente: { nombre, telefono, direccion, referencia },
       tipo, pago: fd.get('pago') || s.metodosPago[0],
       notas: (fd.get('notas') || '').trim(),
@@ -375,12 +373,12 @@
       mensajes: []
     };
     try {
-      await P.placeOrder(order);
-      P.addMyOrder(codigo);
+      const saved = await P.placeOrder(order);
+      P.addMyOrder(saved.codigo);
       CART = []; P.setCart(CART);
       closeDrawer();
       toast('¡Pedido enviado con éxito! 🎉', 'ok');
-      location.hash = '#/pedido/' + codigo;
+      location.hash = '#/pedido/' + saved.codigo;
     } catch (err) {
       console.error(err);
       toast('Error al enviar el pedido. Intenta de nuevo.', 'err');
