@@ -30,11 +30,15 @@
   /* ---------- Login ---------- */
   function renderLogin() {
     document.body.style.background = 'linear-gradient(140deg,#1b1410,#3a2318 60%,#5c2a12)';
+    const connBadge = P.SUPABASE_ENABLED
+      ? `<span class="conn-badge online" style="margin-bottom:14px">🟢 Conectado a Supabase</span>`
+      : `<span class="conn-badge offline" style="margin-bottom:14px">🔴 Modo local (sin sync)</span>`;
     document.getElementById('root').innerHTML = `
     <div class="login-wrap"><div class="login">
       <div class="logo">🍕</div>
       <h1>Panel de Administración</h1>
       <p>${esc(P.DB.settings.nombre)} · Acceso restringido</p>
+      ${connBadge}
       <form id="login-form" autocomplete="off">
         <div class="field" style="text-align:left">
           <label>Contraseña de acceso</label>
@@ -74,11 +78,15 @@
     }
   }
 
-  /* ---------- Render principal del panel ---------- */
+  /* ---------- Render principal ---------- */
   function renderAdmin() {
     if (!P.isAdmin()) { renderLogin(); return; }
     document.body.style.background = '#f4f5f7';
     const pend = P.DB.orders.filter(o => o.estado === 'pendiente').length;
+    const connLabel = P.SUPABASE_ENABLED
+      ? `<span class="conn-badge online" title="Sincronización en tiempo real">🟢 En vivo</span>`
+      : `<span class="conn-badge offline" title="Solo guarda en este navegador">🔴 Local</span>`;
+
     document.getElementById('root').innerHTML = `
     <div class="admin">
       <aside class="sidebar">
@@ -107,6 +115,15 @@
     if (UI.tab === 'productos')  c.innerHTML = adminProducts();
     if (UI.tab === 'categorias') c.innerHTML = adminCategories();
     if (UI.tab === 'ajustes')    c.innerHTML = adminSettings();
+
+    // Insertar badge de conexión arriba a la derecha
+    const top = document.querySelector('.admin-top');
+    if (top) {
+      const spacer = top.querySelector('.spacer');
+      if (spacer) spacer.insertAdjacentHTML('beforebegin', connLabel);
+      else top.appendChild(el0(connLabel));
+    }
+    function el0(html) { const d = document.createElement('span'); d.innerHTML = html; return d.firstChild; }
   }
 
   /* ---------- Dashboard ---------- */
@@ -448,7 +465,7 @@
         <div class="panel-body">
           <div class="grid2">
             <div class="field"><label>Nueva contraseña (déjalo vacío para no cambiar)</label>
-              <input name="newPin" type="password" placeholder="Mínimo 6 caracteres, letras + números + símbolos"
+              <input name="newPin" type="password" placeholder="Mínimo 6 caracteres"
                 style="letter-spacing:1px"></div>
             <div class="field"><label>Confirmar contraseña</label>
               <input name="confirmPin" type="password" placeholder="Repite la contraseña"
@@ -456,8 +473,7 @@
           </div>
           <div class="hint" style="margin-top:0">
             ⚠️ La contraseña se guarda <b>hasheada (SHA-256)</b>, nunca en texto plano.
-            Usa algo fuerte (ej: <code>Pizza$2025!Fuerte</code>) y no lo compartas.
-          </div>
+            Usa algo fuerte (ej: <code>Pizza$2026!Fuerte</code>).</div>
         </div>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:30px">
@@ -523,8 +539,11 @@
         o.estado = el.dataset.estado;
         o.historial = o.historial || [];
         if (!o.historial.some(h => h.estado === o.estado)) o.historial.push({ estado: o.estado, fecha: now() });
-        P.save(); closeModal(); renderAdmin();
-        toast(`Pedido ${o.codigo} → ${P.ESTADO_LABEL[o.estado]}`, 'ok'); break;
+        P.updateOrder(o).then(() => {
+          closeModal(); renderAdmin();
+          toast(`Pedido ${o.codigo} → ${P.ESTADO_LABEL[o.estado]}`, 'ok');
+        });
+        break;
       }
       case 'advance-order': {
         const o = P.DB.orders.find(x => x.id === id); if (!o) break;
@@ -534,8 +553,10 @@
           o.estado = flow[i + 1].id;
           o.historial = o.historial || [];
           o.historial.push({ estado: o.estado, fecha: now() });
-          P.save(); closeModal(); renderAdmin();
-          toast(`Pedido ${o.codigo} → ${P.ESTADO_LABEL[o.estado]}`, 'ok');
+          P.updateOrder(o).then(() => {
+            closeModal(); renderAdmin();
+            toast(`Pedido ${o.codigo} → ${P.ESTADO_LABEL[o.estado]}`, 'ok');
+          });
         }
         break;
       }
@@ -545,22 +566,28 @@
         if (!o || !txt) { toast('Escribe un mensaje', 'err'); break; }
         o.mensajes = o.mensajes || [];
         o.mensajes.push({ texto: txt, fecha: now() });
-        P.save(); openOrderDetail(id);
-        toast('Mensaje enviado al cliente', 'ok'); break;
+        P.updateOrder(o).then(() => {
+          openOrderDetail(id);
+          toast('Mensaje enviado al cliente', 'ok');
+        });
+        break;
       }
       case 'print-order': printTicket(id); break;
-      case 'toggle-open':
+      case 'toggle-open': {
         P.DB.settings.abierto = !P.DB.settings.abierto;
-        P.save(); renderAdmin();
-        toast(P.DB.settings.abierto ? 'Tienda abierta ✅' : 'Tienda cerrada 🔒');
+        P.save().then(() => {
+          renderAdmin();
+          toast(P.DB.settings.abierto ? 'Tienda abierta ✅' : 'Tienda cerrada 🔒');
+        });
         break;
+      }
       case 'product-new': openProductForm(null); break;
       case 'product-edit': openProductForm(id); break;
       case 'product-del': {
         const p = P.DB.products.find(x => x.id === id); if (!p) break;
         if (confirm(`¿Eliminar "${p.nombre}" del catálogo?`)) {
           P.DB.products = P.DB.products.filter(x => x.id !== id);
-          P.save(); renderAdmin(); toast('Producto eliminado');
+          P.save().then(() => { renderAdmin(); toast('Producto eliminado'); });
         } break;
       }
       case 'cat-new': openCatForm(null); break;
@@ -571,7 +598,7 @@
         if (n) { toast(`No puedes borrar: tiene ${n} producto(s)`, 'err'); break; }
         if (confirm(`¿Eliminar la categoría "${c.nombre}"?`)) {
           P.DB.categories = P.DB.categories.filter(x => x.id !== id);
-          P.save(); renderAdmin(); toast('Categoría eliminada');
+          P.save().then(() => { renderAdmin(); toast('Categoría eliminada'); });
         } break;
       }
       case 'add-size': {
@@ -586,7 +613,8 @@
       case 'del-size-row': el.parentElement.remove(); break;
       case 'del-size':
         P.DB.settings.sizes = P.DB.settings.sizes.filter(x => x.id !== el.dataset.id);
-        P.save(); renderAdmin(); toast('Tamaño eliminado'); break;
+        P.save().then(() => { renderAdmin(); toast('Tamaño eliminado'); });
+        break;
       case 'add-extra': {
         const box = document.getElementById('extras-box');
         const div = document.createElement('div');
@@ -599,16 +627,18 @@
       case 'del-extra-row': el.parentElement.remove(); break;
       case 'del-extra':
         P.DB.settings.extras = P.DB.settings.extras.filter(x => x.id !== el.dataset.id);
-        P.save(); renderAdmin(); toast('Extra eliminado'); break;
+        P.save().then(() => { renderAdmin(); toast('Extra eliminado'); });
+        break;
       case 'reset-data':
         if (confirm('⚠️ Esto borrará TODOS los pedidos, productos, ajustes y contraseña.\n¿Continuar?')) {
-          Object.values({ db: P.DB_KEY, cart: P.CART_KEY, my: P.MY_KEY, hash: P.HASH_KEY })
-            .forEach(k => localStorage.removeItem(k));
+          localStorage.removeItem(P.HASH_KEY);
           sessionStorage.removeItem(P.SESSION_KEY);
-          P.init();
-          renderAdmin();
-          toast('Datos restablecidos', 'ok');
-        } break;
+          P.reset().then(() => {
+            toast('Datos restablecidos', 'ok');
+            location.reload();
+          });
+        }
+        break;
     }
   });
 
@@ -618,8 +648,10 @@
     if (t.dataset.action === 'toggle-product') {
       const p = P.DB.products.find(x => x.id === t.dataset.id);
       if (p) {
-        p.disponible = t.checked; P.save();
-        toast(`${p.nombre} ${p.disponible ? 'disponible ✅' : 'marcado como agotado'}`);
+        p.disponible = t.checked;
+        P.save().then(() => {
+          toast(`${p.nombre} ${p.disponible ? 'disponible ✅' : 'marcado como agotado'}`);
+        });
       }
     }
   });
@@ -651,7 +683,8 @@
       if (!data.nombre || data.precio <= 0) { toast('Completa nombre y precio', 'err'); return; }
       if (pid) Object.assign(P.DB.products.find(x => x.id === pid), data);
       else P.DB.products.unshift(Object.assign({ id: uid() }, data));
-      P.save(); closeModal(); renderAdmin();
+      await P.save();
+      closeModal(); renderAdmin();
       toast(pid ? 'Producto actualizado ✅' : 'Producto creado ✅', 'ok');
       return;
     }
@@ -665,7 +698,8 @@
       if (!nombre) { toast('Escribe un nombre', 'err'); return; }
       if (cid) { const c = P.DB.categories.find(x => x.id === cid); c.nombre = nombre; c.emoji = emoji; }
       else P.DB.categories.push({ id: 'c' + uid(), nombre, emoji });
-      P.save(); closeModal(); renderAdmin();
+      await P.save();
+      closeModal(); renderAdmin();
       toast('Categoría guardada ✅', 'ok');
       return;
     }
@@ -687,7 +721,6 @@
       if (!s.metodosPago.length) s.metodosPago = ['Efectivo'];
       s.abierto = fd.get('abierto') === 'on';
 
-      /* Cambio de contraseña */
       const np = (fd.get('newPin') || '').trim();
       const cp = (fd.get('confirmPin') || '').trim();
       if (np || cp) {
@@ -698,7 +731,6 @@
         toast('🔐 Contraseña actualizada', 'ok');
       }
 
-      /* Tamaños */
       const sizes = [];
       document.querySelectorAll('#sizes-box .row-item').forEach((row, i) => {
         const n = row.querySelector('[data-size-name]')?.value.trim();
@@ -707,7 +739,6 @@
       });
       if (sizes.length) s.sizes = sizes;
 
-      /* Extras */
       const extras = [];
       document.querySelectorAll('#extras-box .row-item').forEach((row, i) => {
         const n = row.querySelector('[data-extra-name]')?.value.trim();
@@ -716,7 +747,8 @@
       });
       s.extras = extras;
 
-      P.save(); renderAdmin();
+      await P.save();
+      renderAdmin();
       toast('Ajustes guardados ✅', 'ok');
       return;
     }
@@ -727,21 +759,21 @@
     if (e.key === 'Escape' && document.getElementById('modal-root').innerHTML) closeModal();
   });
 
-  /* ---------- Sincronización multi-pestaña ---------- */
-  window.addEventListener('storage', ev => {
-    if (ev.key === P.DB_KEY) {
-      try {
-        const prevCount = P.DB.orders.length;
-        P.DB = JSON.parse(ev.newValue) || P.DB;
-        if (P.DB.orders.length > prevCount && P.isAdmin()) {
-          toast('🔔 ¡Nuevo pedido recibido!', 'ok');
-        }
-        if (P.isAdmin()) renderAdmin();
-      } catch (err) {}
-    }
-  });
-
   /* ---------- Init ---------- */
-  P.init();
-  renderAdmin();
+  P.init().then(() => {
+    renderAdmin();
+
+    let lastOrderCount = P.DB.orders.length;
+    P.subscribe(() => {
+      const current = P.DB.orders.length;
+      if (P.isAdmin() && current > lastOrderCount) {
+        toast('🔔 ¡Nuevo pedido recibido!', 'ok');
+      }
+      lastOrderCount = current;
+
+      // No re-renderizar si hay un modal abierto o el admin no ha iniciado sesión
+      if (document.querySelector('.modal')) return;
+      if (P.isAdmin()) renderAdmin();
+    });
+  });
 })();

@@ -328,6 +328,13 @@ h1,h2,h3,h4,p{margin:0}
 .login p{color:var(--muted);font-size:.88rem;margin:7px 0 24px}
 .hint{font-size:.76rem;color:var(--muted);margin-top:16px;background:#f8f9fb;padding:10px;border-radius:11px;line-height:1.6}
 
+/* Indicador de conexión */
+.conn-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;
+  font-size:.72rem;font-weight:700;border:1px solid}
+.conn-badge.online{background:#e7f8f0;color:#0f7a52;border-color:#bdecd6}
+.conn-badge.offline{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+.conn-badge.checking{background:#fef9c3;color:#a16207;border-color:#fde68a}
+
 @media(max-width:900px){
   .admin{grid-template-columns:1fr}
   .sidebar{position:static;height:auto;flex-direction:row;align-items:center;overflow-x:auto;padding:12px;gap:8px}

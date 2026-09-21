@@ -191,7 +191,7 @@
       <div class="modal-body">
         <h2>${esc(p.nombre)}</h2>
         <p>${esc(p.descripcion)}</p>
-        ${p.permiteTamano ? `
+        ${p.permiteTamano && P.DB.settings.sizes.length ? `
           <div class="opt-title">Elige el tamaño</div>
           <div class="opts">
             ${P.DB.settings.sizes.map(s => `
@@ -332,7 +332,7 @@
   }
 
   /* ---------- Crear pedido ---------- */
-  function placeOrder() {
+  async function placeOrder() {
     const s = P.DB.settings;
     if (!s.abierto) { toast('La tienda está cerrada', 'err'); return; }
     if (!CART.length) { toast('Tu carrito está vacío', 'err'); return; }
@@ -352,8 +352,8 @@
       toast(`El pedido mínimo para delivery es ${money(s.minOrder)}`, 'err'); return;
     }
     const envio = tipo === 'delivery' ? Number(s.deliveryFee) : 0;
-    P.DB.counter = (P.DB.counter || 1000) + 1;
-    const codigo = 'PED-' + P.DB.counter;
+    const nextCounter = (P.DB.counter || 1000) + 1;
+    const codigo = 'PED-' + nextCounter;
     const order = {
       id: uid(), codigo, creado: now(),
       cliente: { nombre, telefono, direccion, referencia },
@@ -374,12 +374,17 @@
       historial: [{ estado: 'pendiente', fecha: now() }],
       mensajes: []
     };
-    P.DB.orders.unshift(order); P.save();
-    P.addMyOrder(codigo);
-    CART = []; P.setCart(CART);
-    closeDrawer();
-    toast('¡Pedido enviado con éxito! 🎉', 'ok');
-    location.hash = '#/pedido/' + codigo;
+    try {
+      await P.placeOrder(order);
+      P.addMyOrder(codigo);
+      CART = []; P.setCart(CART);
+      closeDrawer();
+      toast('¡Pedido enviado con éxito! 🎉', 'ok');
+      location.hash = '#/pedido/' + codigo;
+    } catch (err) {
+      console.error(err);
+      toast('Error al enviar el pedido. Intenta de nuevo.', 'err');
+    }
   }
 
   /* ---------- Seguimiento ---------- */
@@ -599,12 +604,6 @@
     }
   });
 
-  /* ---------- Sincronización entre pestañas ---------- */
-  window.addEventListener('storage', ev => {
-    if (ev.key === P.DB_KEY) { P.DB = JSON.parse(ev.newValue || 'null') || P.DB; render(); }
-    if (ev.key === P.CART_KEY) { CART = P.getCart(); renderDrawer(); updateBadge(); }
-  });
-
   /* ---------- Router ---------- */
   function render() {
     const h = location.hash || '#/';
@@ -616,8 +615,15 @@
   }
 
   /* ---------- Init ---------- */
-  P.init();
-  CART = P.getCart();
-  window.addEventListener('hashchange', render);
-  render();
+  P.init().then(() => {
+    CART = P.getCart();
+    window.addEventListener('hashchange', render);
+    render();
+
+    // Realtime: re-renderizar cuando cambie algo en Supabase
+    P.subscribe(() => {
+      if (document.querySelector('.modal') || UI.drawer) return;
+      render();
+    });
+  });
 })();
