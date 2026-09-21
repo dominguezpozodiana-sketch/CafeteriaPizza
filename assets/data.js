@@ -7,7 +7,7 @@
   /* ============================================================
      👇 CONFIGURACIÓN — PEGA TUS CREDENCIALES AQUÍ 👇
   ============================================================ */
-  const SUPABASE_URL      = 'https://bmerhduoeeddypaebaik.supabase.co/rest/v1/';        // ej: https://xxxxx.supabase.co
+  const SUPABASE_URL      = 'https://bmerhduoeeddypaebaik.supabase.co';        // ej: https://xxxxx.supabase.co
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtZXJoZHVvZWVkZHlwYWViYWlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5Mjc1NTEsImV4cCI6MjEwNTUwMzU1MX0.Ybh9vZ4B9xnpdX93a3WCyf-D7NP0FQMWSN8huYHIv_8';               // la clave larga que empieza con eyJ...
   /* ============================================================ */
 
