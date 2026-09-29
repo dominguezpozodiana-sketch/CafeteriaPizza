@@ -1,5 +1,5 @@
 /* ============================================================
-   TIENDA — Solo se carga en index.html
+   TIENDA — Tienda para clientes (PWA pública)
 ============================================================ */
 (function () {
   'use strict';
@@ -602,11 +602,28 @@
     }
   });
 
+  /* ---------- Seguimiento en vivo (consulta solo MI pedido cada 8 s) ---------- */
+  let trackTimer = null, trackCode = null;
+  function stopTracking() { clearInterval(trackTimer); trackTimer = null; trackCode = null; }
+  function startTracking(code) {
+    if (code === trackCode) return;
+    stopTracking();
+    trackCode = code;
+    P.trackOrder(code);
+    trackTimer = setInterval(() => {
+      const o = P.DB.orders.find(x => String(x.codigo).toUpperCase() === code.toUpperCase());
+      if (o && (o.estado === 'entregado' || o.estado === 'cancelado')) return;
+      P.trackOrder(code);
+    }, 8000);
+  }
+
   /* ---------- Router ---------- */
   function render() {
     const h = location.hash || '#/';
     const parts = h.split('/');
     const route = parts[1] || '';
+    if (route === 'pedido' && parts[2]) startTracking(decodeURIComponent(parts[2]));
+    else stopTracking();
     if (route === 'pedido')      renderTracking(parts[2] ? decodeURIComponent(parts[2]) : '');
     else if (route === 'seguir') renderTracking('');
     else                         renderShop();
