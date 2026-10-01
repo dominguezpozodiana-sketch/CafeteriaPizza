@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Diagnóstico PWA</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;padding:14px;max-width:640px;margin:auto}
+.r{padding:8px 10px;margin:6px 0;border-radius:8px;background:#eee;word-break:break-all}
+.ok{background:#d9f5dd}.bad{background:#ffd6d6}.warn{background:#fff3c4}h1{font-size:1.2rem}</style></head>
+<body><h1>Diagnóstico de instalación PWA</h1><div id="out"></div>
+<script>
+const out=document.getElementById('out');
+const add=(t,c)=>{const d=document.createElement('div');d.className='r '+(c||'');d.textContent=t;out.appendChild(d);};
+const T=(p,ms)=>Promise.race([p,new Promise((_,r)=>setTimeout(()=>r(new Error('timeout '+ms+'ms')),ms))]);
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();add('✅ beforeinstallprompt DISPARADO: Chrome SÍ considera la app instalable','ok');});
+(async()=>{
+  add('URL: '+location.href);
+  add('Protocolo: '+location.protocol+' | Contexto seguro: '+isSecureContext, isSecureContext?'ok':'bad');
+  add('Navegador: '+navigator.userAgent);
+  add('Modo standalone: '+matchMedia('(display-mode: standalone)').matches);
+  // Manifest
+  try{
+    const l=document.querySelector('link[rel=manifest]').href;
+    const r=await T(fetch(l,{cache:'no-store'}),8000);
+    add('Manifest '+l+' → HTTP '+r.status+' | '+r.headers.get('content-type'), r.ok?'ok':'bad');
+    const m=await r.json();
+    add('Manifest: name="'+m.name+'", display='+m.display+', start_url='+m.start_url+', iconos='+(m.icons||[]).length,'ok');
+    for(const i of (m.icons||[])){
+      try{const ri=await T(fetch(new URL(i.src,l),{cache:'no-store'}),8000);
+        add('Icono '+i.sizes+' '+i.purpose+' → HTTP '+ri.status+' | '+ri.headers.get('content-type'), ri.ok&&/image/.test(ri.headers.get('content-type')||'')?'ok':'bad');
+      }catch(e){add('Icono '+i.src+' ERROR: '+e.message,'bad');}
+    }
+  }catch(e){add('Manifest ERROR: '+e.message,'bad');}
+  // SW
+  try{
+    const r=await T(fetch('./sw.js',{cache:'no-store'}),8000);
+    add('sw.js → HTTP '+r.status+' | '+r.headers.get('content-type'), r.ok&&/javascript/.test(r.headers.get('content-type')||'')?'ok':'bad');
+  }catch(e){add('sw.js ERROR: '+e.message,'bad');}
+  if(!('serviceWorker' in navigator)){add('Sin soporte de Service Worker','bad');}
+  else try{
+    const reg=await T(navigator.serviceWorker.register('./sw.js'),8000);
+    await T(navigator.serviceWorker.ready,10000);
+    const w=reg.active||reg.waiting||reg.installing;
+    add('Service Worker registrado. Estado: '+(w&&w.state)+' | scope: '+reg.scope,'ok');
+  }catch(e){add('Service Worker ERROR: '+e.message,'bad');}
+  // Alcance de externos
+  for(const u of ['https://cdn.jsdelivr.net/','https://bmerhduoeeddypaebaik.supabase.co/rest/v1/']){
+    const t0=performance.now();
+    try{await T(fetch(u,{mode:'no-cors',cache:'no-store'}),6000);add('Alcanzable: '+u+' ('+Math.round(performance.now()-t0)+' ms)','ok');}
+    catch(e){add('NO alcanzable: '+u+' → '+e.message,'warn');}
+  }
+  add('Esperando beforeinstallprompt unos segundos…');
+  setTimeout(()=>add('Fin del diagnóstico. Si no apareció ✅ beforeinstallprompt, copia/captura todo lo de arriba.'),6000);
+})();
+</script></body></html>
