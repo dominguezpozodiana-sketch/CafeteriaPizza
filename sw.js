@@ -1,5 +1,5 @@
-/* Service worker — bella-napoli-cliente-v1 */
-const CACHE = 'bella-napoli-cliente-v1';
+/* Service worker — bella-napoli-cliente-v2 */
+const CACHE = 'bella-napoli-cliente-v2';
 const SHELL = [
   "./",
   "./index.html",
@@ -7,13 +7,21 @@ const SHELL = [
   "./assets/styles.css",
   "./assets/data.js",
   "./assets/pwa.js",
+  "./assets/loader.js",
+  "./assets/shop.js",
   "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./assets/shop.js"
+  "./icons/icon-512.png"
 ];
+// Opcionales: si no existen, la instalación del SW NO debe fallar
+const OPTIONAL = ["./assets/vendor/supabase.js"];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    await c.addAll(SHELL);
+    await Promise.allSettled(OPTIONAL.map(u => c.add(u)));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', e => {
@@ -29,32 +37,14 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // Nunca interceptar la API de Supabase (datos siempre en vivo)
-  if (url.hostname.endsWith('supabase.co')) return;
-
-  // SDK de Supabase (CDN): cache de respaldo para poder abrir la app sin conexión
-  if (url.hostname === 'cdn.jsdelivr.net') {
-    e.respondWith(
-      caches.match(req).then(hit => {
-        const net = fetch(req).then(res => {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(req, copy));
-          return res;
-        }).catch(() => hit);
-        return hit || net;
-      })
-    );
-    return;
-  }
-
+  // Todo lo externo (Supabase, CDNs) va directo a la red: el SW nunca lo retiene ni lo cuelga
   if (url.origin !== location.origin) return;
 
-  // Archivos propios: red primero (siempre la última versión), cache si no hay conexión
+  // Archivos propios: red primero, caché si no hay conexión
   e.respondWith(
     fetch(req).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(req, copy));
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return res;
-    }).catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
+    }).catch(() => caches.match(req).then(hit => hit || (req.mode === 'navigate' ? caches.match('./index.html') : Response.error())))
   );
 });

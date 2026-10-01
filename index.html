@@ -20,10 +20,9 @@
 <div id="modal-root"></div>
 <div id="toasts" class="toasts"></div>
 
-<!-- SDK de Supabase -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="assets/data.js"></script>
-<script src="assets/shop.js"></script>
+<!-- PWA primero: no depende de ningún recurso externo -->
 <script src="assets/pwa.js"></script>
+<!-- Carga SDK (local → CDN con timeout) y luego data.js y shop.js -->
+<script src="assets/loader.js"></script>
 </body>
 </html>

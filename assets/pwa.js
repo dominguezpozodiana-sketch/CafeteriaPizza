@@ -2,9 +2,8 @@
 (function () {
   'use strict';
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(err => console.warn('[PWA] SW:', err));
-    });
+    // Registrar de inmediato (sin esperar 'load', que se retrasa si un CDN está bloqueado)
+    navigator.serviceWorker.register('./sw.js').catch(err => console.warn('[PWA] SW:', err));
   }
 
   const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
